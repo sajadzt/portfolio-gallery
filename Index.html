@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>گالری 3D پورتفولیو - White Round Exhibition</title>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: 'Tahoma', sans-serif; background: #000; }
+        #info-panel {
+            position: absolute; top: 20px; right: 20px; background: rgba(255,255,255,0.9);
+            padding: 20px; border-radius: 8px; max-width: 400px; display: none;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.3); color: #333; z-index: 100;
+        }
+        #info-panel img { max-width: 100%; margin: 10px 0; border-radius: 8px; }
+        #info-panel a { display: block; margin: 10px 0; color: #3498db; }
+        #close-btn { cursor: pointer; font-size: 28px; float: left; }
+        #loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; font-size: 24px; background: rgba(0,0,0,0.5); padding: 20px; border-radius: 8px; }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+</head>
+<body>
+    <div id="loading">در حال بارگذاری گالری... (ممکن است چند ثانیه طول بکشد)</div>
+    <div id="info-panel">
+        <span id="close-btn" onclick="closePanel()">&times;</span>
+        <h2 id="project-name"></h2>
+        <p id="project-desc"></p>
+        <div id="project-images"></div>
+        <div id="project-docs"></div>
+    </div>
+
+    <script>
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xaaaaaa);
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        // نورپردازی
+        const ambientLight = new THREE.AmbientLight(0xffffff, 1);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1.5);
+        directionalLight.position.set(0, 30, 0);
+        scene.add(directionalLight);
+
+        // لود مدل – لینک رو با لینک GitHub خودت جایگزین کن!
+        const glbUrl = 'https://github.com/sajadzt/portfolio-gallery.git'; // <--- اینجا لینک raw GitHub رو بذار
+        // اگر هنوز آپلود نکردی، موقتاً از این لینک Sketchfab proxy استفاده کن (اما ممکنه کند باشه):
+        // const glbUrl = 'https://sketchfab.com/models/a443b8a0a2314a55ae5dee4dd6a151a0/download';
+
+        const loader = new THREE.GLTFLoader();
+        loader.load(glbUrl, function(gltf) {
+            const gallery = gltf.scene;
+            gallery.scale.set(12, 12, 12); // اسکیل بزرگ‌تر برای بهتر دیده شدن (تست کن)
+            gallery.position.y = -8; // کف رو پایین‌تر ببر
+            scene.add(gallery);
+
+            document.getElementById('loading').style.display = 'none';
+
+            // پروژه‌ها (۲۰ تا دایره‌وار)
+            const projects = [];
+            const raycaster = new THREE.Raycaster();
+            const mouse = new THREE.Vector2();
+            let selectedProject = null;
+
+            const numProjects = 20;
+            const radius = 18; // فاصله از مرکز
+            const height = 6;
+
+            for (let i = 0; i < numProjects; i++) {
+                const angle = (i / numProjects) * Math.PI * 2;
+                const geometry = new THREE.PlaneGeometry(3.5, 3.5); // اندازه کوچکتر برای تناسب
+                const material = new THREE.MeshBasicMaterial({ color: Math.random() * 0xffffff, side: THREE.DoubleSide });
+                const plane = new THREE.Mesh(geometry, material);
+
+                plane.position.set(Math.cos(angle) * radius, height, Math.sin(angle) * radius);
+                plane.lookAt(0, height, 0);
+
+                plane.userData = {
+                    name: `پروژه ${i+1}`,
+                    description: `توضیح کامل پروژه ${i+1}...`
+                };
+
+                scene.add(plane);
+                projects.push(plane);
+            }
+
+            function checkProximity() {
+                let closest = null;
+                let minDist = Infinity;
+                projects.forEach(p => {
+                    const dist = camera.position.distanceTo(p.position);
+                    if (dist < minDist && dist < 10) {
+                        minDist = dist;
+                        closest = p;
+                    }
+                });
+                if (closest && closest !== selectedProject) showDetails(closest.userData);
+            }
+
+            function animate() {
+                requestAnimationFrame(animate);
+                controls.update();
+                checkProximity();
+                renderer.render(scene, camera);
+            }
+            animate();
+
+            window.addEventListener('click', event => {
+                mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+                raycaster.setFromCamera(mouse, camera);
+                const intersects = raycaster.intersectObjects(projects);
+                if (intersects.length > 0) showDetails(intersects[0].object.userData);
+            });
+
+        }, (progress) => {
+            console.log('لودینگ: ' + (progress.loaded / progress.total * 100) + '%');
+        }, function(error) {
+            console.error('خطا:', error);
+            document.getElementById('loading').textContent = 'خطا در بارگذاری! لینک فایل رو چک کن یا روی GitHub آپلود کن.';
+        });
+
+        camera.position.set(0, 8, 40);
+
+        // WASD حرکت
+        const move = { w: false, a: false, s: false, d: false };
+        window.addEventListener('keydown', e => { if ('WASD'.includes(e.key.toUpperCase())) move[e.key.toLowerCase()] = true; });
+        window.addEventListener('keyup', e => { if ('WASD'.includes(e.key.toUpperCase())) move[e.key.toLowerCase()] = false; });
+
+        function animate() {
+            const speed = 0.5;
+            const direction = new THREE.Vector3();
+            camera.getWorldDirection(direction);
+            if (move.w) camera.position.addScaledVector(direction, -speed);
+            if (move.s) camera.position.addScaledVector(direction, speed);
+            if (move.a) camera.position.addScaledVector(new THREE.Vector3().crossVectors(direction, new THREE.Vector3(0,1,0)).normalize(), -speed);
+            if (move.d) camera.position.addScaledVector(new THREE.Vector3().crossVectors(direction, new THREE.Vector3(0,1,0)).normalize(), speed);
+        }
+        // در animate اصلی فراخوانی کن اگر لازم بود
+
+        function showDetails(data) {
+            selectedProject = data;
+            document.getElementById('project-name').textContent = data.name;
+            document.getElementById('project-desc').textContent = data.description;
+            document.getElementById('project-images').innerHTML = '<p>عکس‌های واقعی اینجا</p>';
+            document.getElementById('project-docs').innerHTML = '<a href="#">دانلود مدارک</a>';
+            document.getElementById('info-panel').style.display = 'block';
+        }
+
+        function closePanel() {
+            document.getElementById('info-panel').style.display = 'none';
+            selectedProject = null;
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
